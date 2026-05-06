@@ -14,5 +14,6 @@ local.properties
 
 /app/google-services.json
 /app/src/main/java/apw/android/notes/ui/composables/TestNotes.kt
+/app/src/main/java/apw/android/notes/ui/composables/CreateNewTest.kt
 /*.class
 /out/
