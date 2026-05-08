@@ -1,5 +1,7 @@
 package apw.android.notes.ui.composables
 
+import android.app.Activity
+import android.content.Context
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,27 +47,36 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import apw.android.notes.data.NotesDatabase
+import apw.android.notes.launchEditNotes
 import apw.android.notes.ui.theme.APWNotesTheme
-import apw.android.notes.user.AuthViewModel
 import apw.android.notes.user.SessionViewModel
 import apw.android.notes.user.notes.NoteTab
 import apw.android.notes.user.notes.NotesViewModel
-import com.google.firebase.auth.FirebaseAuth
+import apw.android.notes.user.notes.NotesViewModelFactory
 
 @Composable
 fun NotesScreen(
     sessionViewModel: SessionViewModel,
-    viewModel: NotesViewModel = viewModel()
+    onNavigateToAdd: () -> Unit = {}
 ) {
-    val state by viewModel.state.collectAsState()
+    // val state by viewModel.state.collectAsState()
     val colors = MaterialTheme.colorScheme
+    val context: Context = LocalContext.current
     val userState by sessionViewModel.user.collectAsState()
     val userName: String = userState.name ?: "Guest"
+    val database: NotesDatabase = NotesDatabase.getDatabase(context)
+    val notesViewModel: NotesViewModel = viewModel(
+        factory = NotesViewModelFactory(dao = database.notesDao())
+    )
+    val notes by notesViewModel.notes.collectAsState()
+
 
     Scaffold(
         containerColor = colors.background,
@@ -83,14 +95,15 @@ fun NotesScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
+                containerColor = MaterialTheme.colorScheme.primary,
                 onClick = {
-
+                    (context as Activity).launchEditNotes()
                 },
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.NoteAdd,
                     contentDescription = "Add new",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = Color.White
                 )
             }
         }
@@ -99,7 +112,30 @@ fun NotesScreen(
         LazyColumn(
             modifier = Modifier.padding(padding).fillMaxSize()
         ) {
-
+            items(
+                items = notes,
+                key = {it.id}
+            ) { note ->
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp).clickable {
+                        (context as Activity).launchEditNotes(
+                            noteId = note.id
+                        )
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "${note.id}"
+                    )
+                    Text(
+                        text = note.title
+                    )
+                    Text(
+                        text = "${note.createdAt}"
+                    )
+                }
+            }
         }
     }
 }
@@ -131,8 +167,8 @@ fun NotesTabRow(selected: NoteTab, onSelect: (NoteTab) -> Unit) {
                 animationSpec = tween(220), label = "tab_bg"
             )
             val textColor by animateColorAsState(
-                if (isSelected) (if (isDark) Color.White else Color.Black) else (if (isDark) Color.DarkGray else Color.Gray),
-                animationSpec = tween(220), label = "tab_text"
+                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                label = "tab_text"
             )
 
             Row(
@@ -160,7 +196,7 @@ fun NotesTabRow(selected: NoteTab, onSelect: (NoteTab) -> Unit) {
 fun MeshBackground(modifier: Modifier = Modifier) {
 
     val colors = MaterialTheme.colorScheme
-    val isDark = true
+    val isDark = isSystemInDarkTheme()
 
     val baseColor = if (isDark) Color.Black else Color.White
 
@@ -174,7 +210,6 @@ fun MeshBackground(modifier: Modifier = Modifier) {
     }
 
     Canvas(modifier = modifier) {
-
         val w = size.width
         val h = size.height
 
@@ -240,9 +275,7 @@ fun NotesHeader(username: String) {
             Text(
                 text = "${sampleNotes.size} notes · ${sampleTodos.count { !it.isDone }} tasks pending",
                 fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onBackground.copy(
-                    alpha = if (isDark) 0.85f else 0.7f
-                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -300,12 +333,16 @@ fun SearchBar() {
     }
 }
 
-@Preview(showSystemUi = true)
+@Preview(showSystemUi = true, device = "spec:width=411dp,height=891dp", name = "Dark Mode")
 @Composable
 fun PreviewNotes() {
     APWNotesTheme(darkTheme = true) {
-        NotesScreen(
-            viewModel()
-        )
+        androidx.compose.material3.Surface(
+            color = Color.Black
+        ) {
+            NotesScreen(
+                sessionViewModel = viewModel()
+            )
+        }
     }
 }

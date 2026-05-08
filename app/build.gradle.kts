@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-
     id("com.google.gms.google-services")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -37,12 +37,17 @@ android {
 }
 
 dependencies {
+    implementation("androidx.compose.runtime:runtime:1.11.1")
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation(platform("androidx.compose:compose-bom:2026.04.01"))
-    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation(platform("androidx.compose:compose-bom:2026.05.00"))
+    implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
+    implementation("androidx.room:room-runtime:2.8.4")
+    implementation("androidx.room:room-ktx:2.8.4")
+    ksp("androidx.room:room-compiler:2.8.4")
     implementation("androidx.navigation:navigation-compose:2.9.8")
+    implementation("com.android.identity:identity-jvm:202411.1")
     implementation("com.google.firebase:firebase-analytics-ktx:22.5.0")
     implementation("com.google.firebase:firebase-auth-ktx:23.2.1")
     implementation("com.google.android.gms:play-services-auth:21.5.1")
@@ -59,7 +64,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2026.04.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.05.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

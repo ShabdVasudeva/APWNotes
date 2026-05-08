@@ -13,6 +13,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import apw.android.notes.ui.composables.CreateNoteScreen
 import apw.android.notes.ui.composables.LoginScreen
 import apw.android.notes.ui.composables.NotesScreen
 import apw.android.notes.ui.theme.APWNotesTheme
@@ -50,8 +51,17 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("notes") {
                         NotesScreen(
-                            sessionViewModel = sessionViewModel
+                            sessionViewModel = sessionViewModel,
+                            onNavigateToAdd = {
+                                navController.navigate("add_note")
+                            }
                         )
+                    }
+
+                    composable("add_note") {
+                        CreateNoteScreen {
+
+                        }
                     }
                 }
             }
