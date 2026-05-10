@@ -5,48 +5,72 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.NoteAdd
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Summarize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +82,7 @@ import apw.android.notes.data.NoteBlock
 import apw.android.notes.data.NotesDatabase
 import apw.android.notes.ui.theme.APWNotesTheme
 import kotlinx.coroutines.launch
+import kotlin.collections.mutableMapOf
 
 fun Activity.launchEditNotes(
     noteId: Long? = null
@@ -72,7 +97,16 @@ fun Activity.launchEditNotes(
 class EditNoteActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT
+            )
+        )
         val noteId = intent.getLongExtra("note_id", -1L)
         setContent {
             APWNotesTheme {
@@ -99,10 +133,17 @@ fun EditNotes(noteId: Long) {
             is NoteBlock.Image -> 0
         }
     }
-    val initText = if (characterCount == 0) "Write something" else "wanna write more ?"
+    val editorTextStyle = TextStyle(
+        fontSize = 16.sp,
+        color = colorScheme.onBackground,
+        lineHeight = 22.sp
+    )
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val focusRequesters = remember { mutableMapOf<Long, FocusRequester>() }
 
     LaunchedEffect(noteId) {
-        if (noteId == null) return@LaunchedEffect
         val note = db.notesDao().getNoteById(noteId) ?: return@LaunchedEffect
         val blocks = db.notesDao().getBlocksForNote(noteId)
 
@@ -115,68 +156,53 @@ fun EditNotes(noteId: Long) {
     Scaffold(
         containerColor = colorScheme.background,
         topBar = {
-            Row(
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BasicTextField(
-                    value = uiState.title,
-                    onValueChange = { viewModel.updateTitle(it) },
-                    textStyle = TextStyle(
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onBackground
-                    ),
-                    modifier = Modifier.weight(1f),
-                    decorationBox = {
-                        if (uiState.title.isEmpty()) {
-                            Text(
-                                "Title",
-                                fontSize = 26.sp,
-                                color = Color.Gray
-                            )
-                        }
-                        it()
-                    }
-                )
-                Box(
-                    modifier = Modifier
-                        .width(52.dp)
-                        .height(26.dp)
-                        .clip(CircleShape)
-                        .clickable {
-                            viewModel.viewModelScope.launch { 
-                                viewModel.saveNote()
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Save",
-                        color = colorScheme.primary
-                    )
-                }
-            }
+            TopAppBar(
+                title = uiState.title,
+                onTitleChange = { viewModel.updateTitle(it) },
+                onSaveClick = { viewModel.viewModelScope.launch { viewModel.saveNote() } },
+                onBackClick = {(context as Activity).finish()},
+                modifier = Modifier.statusBarsPadding(),
+                undo = { viewModel.undo() },
+                redo = { viewModel.redo() }
+            )
         },
         bottomBar = {
             BottomEditBar(
                 characterCount = characterCount,
-                modifier = Modifier,
-                onCheckBoxClick = {
-                    viewModel.addCheckBoxBlockAfterFocused()
-                }
-            ) {
-                viewModel.addImageBlock("test")
-            }
+                modifier = Modifier.imePadding(),
+                isBold = (viewModel.currentTextStyle?.isBold == true),
+                isHeading = (viewModel.currentTextStyle?.isHeading == true),
+                isUnderline = (viewModel.currentTextStyle?.isUnderline == true),
+                isStrikeThrough = (viewModel.currentTextStyle?.isStrikeThrough == true),
+                onToggleBold = { viewModel.toggleBold() },
+                onCheckBoxClick = { viewModel.addCheckBoxBlockAfterFocused() },
+                onAddImageClick = { viewModel.addImageBlock("") },
+                onTagClick = {},
+                onVoiceClick = {},
+                isItalic = (viewModel.currentTextStyle?.isItalic == true),
+                onToggleItalic = { viewModel.toggleItalic() },
+                isCenter = (viewModel.currentTextStyle?.alignment == TextAlign.Center),
+                toggleAlignment = { viewModel.updateAlignment(it) },
+                toggleHeading = { viewModel.toggleHeading() },
+                toggleUnderline = { viewModel.toggleUnderline() },
+                toggleStrikeThrough = { viewModel.toggleStrikeThrough() }
+            )
         }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        val focusedId =
+                            viewModel.currentBlockId.value ?: uiState.blocks.lastOrNull()?.id
+
+                        focusedId?.let {
+                            focusRequesters[it]?.requestFocus()
+                        }
+                        keyboardController?.show()
+                    }
+                }
                 .padding(paddingValues = innerPadding)
                 .padding(start = 5.dp, end = 5.dp)
         ) {
@@ -187,31 +213,70 @@ fun EditNotes(noteId: Long) {
                 when (block) {
 
                     is NoteBlock.Text -> {
+
+                        val isFirstBlock =
+                            uiState.blocks.firstOrNull()?.id == block.id
+
+                        val focusRequester: FocusRequester = remember(block.id) {
+                            FocusRequester()
+                        }
+                        val fontWeight = when {
+                            block.style.isHeading -> FontWeight.SemiBold
+                            block.style.isBold -> FontWeight.Bold
+                            else -> FontWeight.Normal
+                        }
+                        val textDecoration = when {
+                            block.style.isUnderline -> TextDecoration.Underline
+                            block.style.isStrikeThrough -> TextDecoration.LineThrough
+                            else -> TextDecoration.None
+                        }
+
+                        val editorTextStyle = editorTextStyle.copy(
+                            fontWeight = fontWeight,
+                            fontStyle = if (block.style.isItalic) FontStyle.Italic else FontStyle.Normal,
+                            textAlign = block.style.alignment,
+                            fontSize = if (block.style.isHeading) 30.sp else 16.sp,
+                            lineHeight = if (block.style.isHeading) 38.sp else 28.sp,
+                            textDecoration = textDecoration
+                        )
+
+                        focusRequesters[block.id] = focusRequester
                         BasicTextField(
                             value = block.txt,
                             onValueChange = {
-                                viewModel.updateTextBlock(block.id, it)
+                                if ("\n" in it) {
+                                    val cleaned = it.replace("\n", "")
+                                    viewModel.updateTextBlock(
+                                        block.id,
+                                        cleaned
+                                    )
+                                    viewModel.insertTextBlockAfter(block.id)
+                                } else {
+                                    viewModel.updateTextBlock(
+                                        block.id,
+                                        it
+                                    )
+                                }
                             },
-                            textStyle = TextStyle(
-                                fontSize = 16.sp,
-                                color = colorScheme.onBackground
-                            ),
+                            textStyle = editorTextStyle,
                             modifier = Modifier
                                 .padding(5.dp)
                                 .fillMaxWidth()
+                                .focusRequester(focusRequester)
                                 .onFocusChanged {
                                     if (it.isFocused) {
                                         viewModel.updateFocusedBlock(id = block.id)
+                                        keyboardController?.show()
                                     }
                                 },
                             decorationBox = {
                                 if (block.txt.isEmpty()) {
                                     Text(
-                                        initText,
+                                        if(block.txt.isEmpty() && isFirstBlock) "write something" else "",
                                         color = Color.LightGray.copy(0.7f),
                                         modifier = Modifier
-                                            .padding(5.dp)
-                                            .fillMaxWidth()
+                                            .fillMaxWidth(),
+                                        style = editorTextStyle
                                     )
                                 }
                                 it()
@@ -220,25 +285,31 @@ fun EditNotes(noteId: Long) {
                     }
 
                     is NoteBlock.CheckBox -> {
+                        val focusRequester: FocusRequester = remember(block.id) {
+                            FocusRequester()
+                        }
+
+                        focusRequesters[block.id] = focusRequester
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (block.isChecked)
-                                    Icons.Outlined.CheckCircle
-                                else Icons.Outlined.CheckCircle,
+                                painter = if (block.isChecked)
+                                    painterResource(R.drawable.checkbox_filled)
+                                else painterResource(R.drawable.checkbox),
                                 contentDescription = null,
                                 tint = if (block.isChecked)
                                     colorScheme.primary
                                 else Color.Gray,
                                 modifier = Modifier
                                     .size(20.dp)
+                                    .clip(CircleShape)
                                     .clickable {
                                         viewModel.updateCheckBoxCheck(block.id, !block.isChecked)
                                     }
                             )
 
-                            Spacer(Modifier.size(10.dp))
+                            Spacer(Modifier.size(3.dp))
 
                             BasicTextField(
                                 value = block.txt,
@@ -254,15 +325,14 @@ fun EditNotes(noteId: Long) {
                                 modifier = Modifier
                                     .padding(all = 5.dp)
                                     .fillMaxWidth()
+                                    .focusRequester(focusRequester)
                                     .onFocusChanged {
                                         if (it.isFocused) {
                                             viewModel.updateFocusedBlock(id = block.id)
+                                            keyboardController?.show()
                                         }
                                     },
-                                textStyle = TextStyle(
-                                    fontSize = 16.sp,
-                                    color = colorScheme.onBackground
-                                ),
+                                textStyle = editorTextStyle,
                                 decorationBox = {
                                     if (block.txt.isEmpty()) {
                                         Text(
@@ -270,7 +340,8 @@ fun EditNotes(noteId: Long) {
                                             color = Color.Gray.copy(alpha = 0.7f),
                                             modifier = Modifier
                                                 .padding(all = 5.dp)
-                                                .fillMaxWidth()
+                                                .fillMaxWidth(),
+                                            style = editorTextStyle
                                         )
                                     }
                                     it()
@@ -288,12 +359,14 @@ fun EditNotes(noteId: Long) {
                                 .onFocusChanged {
                                     if (it.isFocused) {
                                         viewModel.updateFocusedBlock(id = block.id)
+                                        keyboardController?.hide()
                                     }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Text("Image Preview")
                         }
+                        viewModel.insertTextBlockAfter(id = block.id)
                     }
                 }
             }
@@ -301,74 +374,516 @@ fun EditNotes(noteId: Long) {
     }
 }
 
-
 @Composable
 fun BottomEditBar(
     characterCount: Int,
     modifier: Modifier = Modifier,
+
+    isBold: Boolean,
+    isItalic: Boolean,
+
+    onToggleBold: () -> Unit,
+    onToggleItalic: () -> Unit,
+
     onCheckBoxClick: () -> Unit,
-    onAddImageClick: () -> Unit
+    onAddImageClick: () -> Unit,
+
+    onTagClick: () -> Unit,
+    onVoiceClick: () -> Unit,
+
+    isCenter: Boolean,
+    toggleAlignment: (TextAlign) -> Unit,
+    toggleHeading: () -> Unit,
+    toggleUnderline: () -> Unit,
+    toggleStrikeThrough: () -> Unit,
+    isUnderline: Boolean,
+    isStrikeThrough: Boolean,
+    isHeading: Boolean
 ) {
-    Row(
+
+    val colorScheme = MaterialTheme.colorScheme
+
+    var isFormattingExpanded by remember {
+        mutableStateOf(false)
+    }
+
+    val items = listOf(
+        FormatItem(
+            icon = R.drawable.bold,
+            isSelected = isBold,
+            contentDescription = "Bold",
+            onClick = onToggleBold
+        ),
+        FormatItem(
+            icon = R.drawable.italics,
+            isSelected = isItalic,
+            contentDescription = "Italic",
+            onClick = onToggleItalic
+        ),
+        FormatItem(
+            icon = R.drawable.align_center,
+            isSelected = isCenter,
+            contentDescription = "Align center",
+            onClick = {
+                toggleAlignment(if (isCenter) TextAlign.Start else TextAlign.Center)
+            }
+        ),
+        FormatItem(
+            icon = R.drawable.heading,
+            isSelected = isHeading,
+            contentDescription = "Heading",
+            onClick = toggleHeading
+        ),
+        FormatItem(
+            icon = R.drawable.underline,
+            isSelected = isUnderline,
+            contentDescription = "Underline",
+            onClick = toggleUnderline
+        ),
+        FormatItem(
+            icon = R.drawable.strike_through,
+            isSelected = isStrikeThrough,
+            contentDescription = "Stricked Text",
+            onClick = toggleStrikeThrough
+        ),
+        FormatItem(
+            icon = R.drawable.list,
+            contentDescription = "Formated list",
+            onClick = {}
+        ),
+        FormatItem(
+            icon = R.drawable.number_list,
+            contentDescription = "Number list",
+            onClick = {}
+        ),
+        FormatItem(
+            icon = R.drawable.quote_block,
+            contentDescription = "Quote",
+            onClick = {}
+        ),
+        FormatItem(
+            icon = R.drawable.code_block,
+            contentDescription = "Code block",
+            onClick = {}
+        ),
+    )
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .background(color = MaterialTheme.colorScheme.background)
-            .padding(vertical = 20.dp, horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .imePadding()
+            .navigationBarsPadding(),
+        color = colorScheme.background
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            IconButton(
-                onClick = {
-                    onCheckBoxClick()
-                },
-                modifier = Modifier.size(24.dp)
+        Column(
+            modifier = Modifier
+                .animateContentSize()
+        ) {
+            AnimatedVisibility(
+                visible = isFormattingExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.CheckCircle,
-                    contentDescription = "Add Todo",
+                LazyRow(
                     modifier = Modifier
-                        .size(22.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = 14.dp,
+                            vertical = 10.dp
+                        ),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(items) { item ->
+                        if (item.isSelected != null) {
+                            BottomBarToggleButton(
+                                icon = item.icon,
+                                contentDescription = item.contentDescription,
+                                isSelected = item.isSelected,
+                                onClick = item.onClick
+                            )
+                        } else {
+                            BottomBarActionButton(
+                                icon = item.icon,
+                                contentDescription = item.contentDescription,
+                                onClick = item.onClick
+                            )
+                        }
+                    }
+                }
             }
-            IconButton(
-                onClick = {
-                    onAddImageClick()
-                },
-                modifier = Modifier.size(24.dp)
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = 14.dp,
+                        vertical = 12.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.NoteAdd,
-                    contentDescription = "Add Todo",
+
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+
+                    item {
+
+                        BottomBarActionButton(
+                            icon = R.drawable.checkbox,
+                            contentDescription = "Checklist",
+                            onClick = onCheckBoxClick
+                        )
+                    }
+
+                    item {
+
+                        BottomBarActionButton(
+                            icon = R.drawable.image,
+                            contentDescription = "Image",
+                            onClick = onAddImageClick
+                        )
+                    }
+
+                    item {
+
+                        BottomBarActionButton(
+                            icon = R.drawable.summarize_alt,
+                            contentDescription = "Ai Summary",
+                            onClick = onTagClick
+                        )
+                    }
+
+                    item {
+
+                        BottomBarActionButton(
+                            icon = R.drawable.writer,
+                            contentDescription = "Ai Writer",
+                            onClick = onVoiceClick
+                        )
+                    }
+
+                    item {
+
+                        BottomBarToggleButton(
+                            icon = R.drawable.formatting,
+                            contentDescription = "Formatting",
+                            isSelected = isFormattingExpanded
+                        ) {
+
+                            isFormattingExpanded =
+                                !isFormattingExpanded
+                        }
+                    }
+                }
+
+                VerticalDivider(
                     modifier = Modifier
-                        .size(22.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+                        .height(18.dp)
+                        .padding(horizontal = 10.dp),
+                    color = colorScheme.outlineVariant
                 )
-            }
-            IconButton(
-                onClick = {
-                    onAddImageClick()
-                },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Summarize,
-                    contentDescription = "Add Todo",
-                    modifier = Modifier
-                        .size(22.dp),
-                    tint = MaterialTheme.colorScheme.onSurface
+
+                Text(
+                    text = "$characterCount chars",
+                    fontSize = 12.sp,
+                    color = colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }
-        Text(
-            "$characterCount chars",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    }
+}
+
+
+@Composable
+private fun BottomBarActionButton(
+    icon: Int,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+
+    val colorScheme = MaterialTheme.colorScheme
+
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(
+                colorScheme.surfaceContainerHighest.copy(alpha = 0.75f)
+            )
+            .clickable {
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = contentDescription,
+            tint = colorScheme.onSurface,
+            modifier = Modifier.size(19.dp)
         )
     }
 }
+
+@Composable
+private fun BottomBarToggleButton(
+    icon: Int,
+    contentDescription: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+
+    val colorScheme = MaterialTheme.colorScheme
+
+    val backgroundColor =
+        if (isSelected)
+            colorScheme.primary.copy(alpha = 0.18f)
+        else
+            colorScheme.surfaceContainerHighest.copy(alpha = 0.75f)
+
+    val iconTint =
+        if (isSelected)
+            colorScheme.primary
+        else
+            colorScheme.onSurface
+
+    val scale by animateFloatAsState(
+        if (isSelected) 1.08f else 1f,
+        label = ""
+    )
+
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .scale(scale)
+            .clickable {
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = contentDescription,
+            tint = iconTint,
+            modifier = Modifier.size(19.dp)
+        )
+    }
+}
+
+@Composable
+fun TopAppBar(
+    title: String,
+    onTitleChange: (String) -> Unit,
+    onSaveClick: () -> Unit,
+    onBackClick: () -> Unit,
+    undo: () -> Unit,
+    redo: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+
+    val tagsList = listOf(
+        "#ideas", "#android"
+    )
+
+    val colorScheme = MaterialTheme.colorScheme
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = colorScheme.background
+    ) {
+
+        Column(
+            modifier = Modifier
+                .statusBarsPadding()
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 18.dp, vertical = 12.dp
+                )
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(
+                            colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
+                        )
+                        .clickable {
+                            onBackClick()
+                        }, contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.back),
+                        contentDescription = "Back",
+                        tint = colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(Modifier.width(14.dp))
+
+                BasicTextField(
+                    value = title,
+                    onValueChange = onTitleChange,
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colorScheme.onBackground,
+                        letterSpacing = (-0.3).sp
+                    ),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+
+                        if (title.isEmpty()) {
+                            Text(
+                                text = "Untitled",
+                                color = colorScheme.onSurface.copy(alpha = 0.35f),
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        innerTextField()
+                    })
+
+                Spacer(Modifier.width(10.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
+                            )
+                            .clickable {
+
+                            }, contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.pin),
+                            contentDescription = "Pin",
+                            tint = colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .height(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.primary.copy(0.6f)
+                                    )
+                                )
+                            )
+                            .clickable {
+                                onSaveClick()
+                            }
+                            .padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+
+                            Icon(
+                                painter = painterResource(R.drawable.save),
+                                contentDescription = "Save",
+                                tint = colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+
+                            Text(
+                                text = "Save",
+                                color = colorScheme.onPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(tagsList) { item ->
+                        SuggestionChip(onClick = {}, label = {
+                            Text(text = item)
+                        })
+                    }
+                    item {
+                        SuggestionChip(onClick = {}, label = {
+                            Text(text = "+ Add")
+                        })
+                    }
+                }
+                VerticalDivider(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .padding(horizontal = 10.dp),
+                    color = colorScheme.outlineVariant
+                )
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            undo()
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.undo),
+                            contentDescription = "undo"
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            redo()
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.redo),
+                            contentDescription = "redo"
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class FormatItem(
+    val icon: Int,
+    val isSelected: Boolean? = null,
+    val contentDescription: String,
+    val onClick: () -> Unit
+)
 
 @Preview(showSystemUi = true)
 @Composable

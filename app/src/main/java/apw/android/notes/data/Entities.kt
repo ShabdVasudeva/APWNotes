@@ -1,5 +1,6 @@
 package apw.android.notes.data
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -8,7 +9,20 @@ fun BlockEntity.toDomain(): NoteBlock {
         "text" -> {
             NoteBlock.Text(
                 id = id,
-                txt = text ?: ""
+                txt = text ?: "",
+                style = TextStyleState(
+                    isBold = isBold,
+                    isItalic = isItalic,
+                    isHeading = isHeading,
+                    isUnderline = isUnderline,
+                    isStrikeThrough = isStrikeThrough,
+                    alignment = when(alignment) {
+                        "center" -> TextAlign.Center
+                        "end" -> TextAlign.End
+                        "justify" -> TextAlign.Justify
+                        else -> TextAlign.Start
+                    }
+                )
             )
         }
         "checkbox" -> {
@@ -51,5 +65,11 @@ data class BlockEntity(
     val type: String,
     val text: String?,
     val isChecked: Boolean?,
-    val imageUri: String?
+    val imageUri: String?,
+    val isBold: Boolean = false,
+    val isItalic: Boolean = false,
+    val isHeading: Boolean = false,
+    val isUnderline: Boolean = false,
+    val isStrikeThrough: Boolean = false,
+    val alignment: String = "Start"
 )

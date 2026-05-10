@@ -1,47 +1,94 @@
 package apw.android.notes.data
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.abs
 
 class EditViewModelFactory(
     private val dao: NotesDAO
-): ViewModelProvider.Factory {
+) : ViewModelProvider.Factory {
 
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return EditViewModel(dao) as T
     }
 }
 
-
 data class EditNotesUIState(
-    val noteId: Long? = null, val title: String = "", val blocks: List<NoteBlock> = listOf(
+    val noteId: Long? = null,
+    val title: String = "",
+    val blocks: List<NoteBlock> = listOf(
         NoteBlock.Text(
-            id = System.nanoTime(), txt = ""
+            id = System.nanoTime(),
+            txt = ""
         )
     )
 )
 
-class EditViewModel(private val dao: NotesDAO) : ViewModel() {
+class EditViewModel(
+    private val dao: NotesDAO
+) : ViewModel() {
+
+    companion object {
+        private const val MAX_UNDO_STACK_SIZE = 100
+        private const val SNAPSHOT_THRESHOLD = 5
+    }
 
     private val _uiState = MutableStateFlow(EditNotesUIState())
     val uiState = _uiState.asStateFlow()
+
     private val _currentBlockId = MutableStateFlow<Long?>(null)
     val currentBlockId = _currentBlockId.asStateFlow()
+
+    private val undoStack = mutableListOf<EditNotesUIState>()
+    private val redoStack = mutableListOf<EditNotesUIState>()
+
+    private var lastSnapshotText = ""
+
+    val currentTextStyle: TextStyleState?
+        get() {
+            val focusedId = _currentBlockId.value ?: return null
+
+            val block = _uiState.value.blocks.find {
+                it.id == focusedId
+            }
+
+            return (block as? NoteBlock.Text)?.style
+        }
 
     private fun generateId(): Long {
         return System.nanoTime()
     }
 
-    fun updateFocusedBlock(id: Long) {
-        _currentBlockId.value = id
+    private fun findBlockIndex(id: Long): Int {
+        return _uiState.value.blocks.indexOfFirst {
+            it.id == id
+        }
+    }
+
+    private fun pushToUndoStack() {
+
+        undoStack.add(
+            _uiState.value.copy(
+                blocks = _uiState.value.blocks.toMutableList()
+            )
+        )
+
+        if (undoStack.size > MAX_UNDO_STACK_SIZE) {
+            undoStack.removeAt(0)
+        }
+
+        redoStack.clear()
     }
 
     private fun updateBlocks(
         transform: MutableList<NoteBlock>.() -> Unit
     ) {
+
         val updated = _uiState.value.blocks.toMutableList()
+
         updated.transform()
 
         _uiState.value = _uiState.value.copy(
@@ -49,69 +96,99 @@ class EditViewModel(private val dao: NotesDAO) : ViewModel() {
         )
     }
 
-    private fun findBlockIndex(id: Long): Int {
-        return _uiState.value.blocks.indexOfFirst { it.id == id }
+    private fun updateBlocksWithoutHistory(
+        transform: MutableList<NoteBlock>.() -> Unit
+    ) {
+
+        val updated = _uiState.value.blocks.toMutableList()
+
+        updated.transform()
+
+        _uiState.value = _uiState.value.copy(
+            blocks = updated
+        )
     }
 
-    fun addCheckBoxBlock() {
-        updateBlocks {
-            add(
-                NoteBlock.CheckBox(
-                    id = generateId(), txt = "", isChecked = false
-                )
-            )
-        }
-    }
+    private fun updateFormat(
+        transform: TextStyleState.() -> TextStyleState
+    ) {
 
-    fun addCheckBoxBlockAfterFocused() {
-        val focusedId = _currentBlockId.value
-        if (focusedId == null) {
-            addCheckBoxBlock()
-            return
-        }
+        val focusedId = _currentBlockId.value ?: return
 
         val index = findBlockIndex(focusedId)
+
         if (index == -1) return
 
         updateBlocks {
-            add(
-                index + 1, NoteBlock.CheckBox(
-                    id = generateId(), txt = "", isChecked = false
-                )
+
+            val old = this[index] as? NoteBlock.Text
+                ?: return@updateBlocks
+
+            this[index] = old.copy(
+                style = old.style.transform()
             )
         }
     }
 
-    fun insertTextBlockAfter(id: Long) {
+    fun updateFocusedBlock(id: Long) {
+        _currentBlockId.value = id
+    }
+
+    fun undo() {
+
+        if (undoStack.isEmpty()) return
+
+        redoStack.add(
+            _uiState.value.copy(
+                blocks = _uiState.value.blocks.toList()
+            )
+        )
+
+        _uiState.value = undoStack.removeAt(
+            undoStack.lastIndex
+        )
+    }
+
+    fun redo() {
+
+        if (redoStack.isEmpty()) return
+
+        undoStack.add(
+            _uiState.value.copy(
+                blocks = _uiState.value.blocks.toList()
+            )
+        )
+
+        _uiState.value = redoStack.removeAt(
+            redoStack.lastIndex
+        )
+    }
+
+    fun updateTitle(newTitle: String) {
+
+        _uiState.value = _uiState.value.copy(
+            title = newTitle
+        )
+    }
+
+    fun updateTextBlock(
+        id: Long,
+        txt: String
+    ) {
+
+        if (abs(txt.length - lastSnapshotText.length) >= SNAPSHOT_THRESHOLD) {
+
+            pushToUndoStack()
+
+            lastSnapshotText = txt
+        }
+
         val index = findBlockIndex(id)
 
         if (index == -1) return
 
-        updateBlocks {
-            add(
-                index + 1, NoteBlock.Text(
-                    id = generateId(), txt = ""
-                )
-            )
-        }
-    }
+        updateBlocksWithoutHistory {
 
-    fun addImageBlock(uri: String) {
-        updateBlocks {
-            add(
-                NoteBlock.Image(
-                    id = generateId(), uri = uri
-                )
-            )
-        }
-    }
-
-    fun updateTextBlock(id: Long, txt: String) {
-        val index = findBlockIndex(id)
-
-        if (index == -1) return
-
-        updateBlocks {
             val old = this[index] as NoteBlock.Text
 
             this[index] = old.copy(
@@ -120,24 +197,17 @@ class EditViewModel(private val dao: NotesDAO) : ViewModel() {
         }
     }
 
-    fun updateCheckBoxCheck(id: Long, isChecked: Boolean) {
+    fun updateCheckBoxTitle(
+        id: Long,
+        txt: String
+    ) {
+
         val index = findBlockIndex(id)
 
         if (index == -1) return
 
         updateBlocks {
-            val old = this[index] as NoteBlock.CheckBox
 
-            this[index] = old.copy(
-                isChecked = isChecked
-            )
-        }
-    }
-
-    fun updateCheckBoxTitle(id: Long, txt: String) {
-        val index = findBlockIndex(id)
-        if (index == -1) return
-        updateBlocks {
             val old = this[index] as NoteBlock.CheckBox
 
             this[index] = old.copy(
@@ -146,32 +216,130 @@ class EditViewModel(private val dao: NotesDAO) : ViewModel() {
         }
     }
 
-    fun updateTitle(newTitle: String) {
-        _uiState.value = _uiState.value.copy(
-            title = newTitle
-        )
+    fun updateCheckBoxCheck(
+        id: Long,
+        isChecked: Boolean
+    ) {
+
+        val index = findBlockIndex(id)
+
+        if (index == -1) return
+
+        updateBlocks {
+
+            val old = this[index] as NoteBlock.CheckBox
+
+            this[index] = old.copy(
+                isChecked = isChecked
+            )
+        }
+    }
+
+    fun addCheckBoxBlock() {
+
+        updateBlocks {
+
+            add(
+                NoteBlock.CheckBox(
+                    id = generateId(),
+                    txt = "",
+                    isChecked = false
+                )
+            )
+        }
+    }
+
+    fun addCheckBoxBlockAfterFocused() {
+
+        val focusedId = _currentBlockId.value
+
+        if (focusedId == null) {
+            addCheckBoxBlock()
+            return
+        }
+
+        val index = findBlockIndex(focusedId)
+
+        if (index == -1) return
+
+        updateBlocks {
+
+            add(
+                index + 1,
+                NoteBlock.CheckBox(
+                    id = generateId(),
+                    txt = "",
+                    isChecked = false
+                )
+            )
+        }
+    }
+
+    fun insertTextBlockAfter(id: Long) {
+
+        val index = findBlockIndex(id)
+
+        if (index == -1) return
+
+        updateBlocks {
+
+            add(
+                index + 1,
+                NoteBlock.Text(
+                    id = generateId(),
+                    txt = ""
+                )
+            )
+        }
+    }
+
+    fun addImageBlock(uri: String) {
+
+        updateBlocks {
+
+            add(
+                NoteBlock.Image(
+                    id = generateId(),
+                    uri = uri
+                )
+            )
+        }
     }
 
     suspend fun saveNote() {
+
         val current = _uiState.value
-        val noteId = current.noteId ?: System.currentTimeMillis()
-        val noteEntity: NoteEntity = NoteEntity(
+
+        val noteId = current.noteId
+            ?: System.currentTimeMillis()
+
+        val noteEntity = NoteEntity(
             id = noteId,
             title = current.title,
-            createdAt = if(current.noteId == null) System.currentTimeMillis() else dao.getNoteById(noteId)?.createdAt ?: System.currentTimeMillis(),
+
+            createdAt = if (current.noteId == null) {
+                System.currentTimeMillis()
+            } else {
+                dao.getNoteById(noteId)?.createdAt
+                    ?: System.currentTimeMillis()
+            },
+
             updatedAt = System.currentTimeMillis()
         )
+
         dao.insertNote(noteEntity)
+
         dao.deleteBlockForNote(noteId)
 
-        val blockEntity: List<BlockEntity> = current.blocks.mapIndexed { index, block ->
+        val blockEntities = current.blocks.mapIndexed { index, block ->
+
             block.toRoomEntity(
                 noteId = noteId,
                 position = index
             )
         }
 
-        dao.insertBlocks(blockEntity)
+        dao.insertBlocks(blockEntities)
 
         _uiState.value = current.copy(
             noteId = noteId
@@ -182,12 +350,52 @@ class EditViewModel(private val dao: NotesDAO) : ViewModel() {
         note: NoteEntity,
         blocks: List<BlockEntity>
     ) {
+
         _uiState.value = EditNotesUIState(
             noteId = note.id,
             title = note.title,
+
             blocks = blocks
                 .sortedBy { it.position }
                 .map { it.toDomain() }
         )
+    }
+
+    fun toggleBold() {
+        updateFormat {
+            copy(isBold = !isBold)
+        }
+    }
+
+    fun toggleItalic() {
+        updateFormat {
+            copy(isItalic = !isItalic)
+        }
+    }
+
+    fun toggleUnderline() {
+        updateFormat {
+            copy(isUnderline = !isUnderline)
+        }
+    }
+
+    fun toggleStrikeThrough() {
+        updateFormat {
+            copy(isStrikeThrough = !isStrikeThrough)
+        }
+    }
+
+    fun toggleHeading() {
+        updateFormat {
+            copy(isHeading = !isHeading)
+        }
+    }
+
+    fun updateAlignment(
+        align: TextAlign
+    ) {
+        updateFormat {
+            copy(alignment = align)
+        }
     }
 }

@@ -23,13 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.NoteAdd
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,11 +41,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import apw.android.notes.R
 import apw.android.notes.data.NotesDatabase
 import apw.android.notes.launchEditNotes
 import apw.android.notes.ui.theme.APWNotesTheme
@@ -63,8 +58,7 @@ import apw.android.notes.user.notes.NotesViewModelFactory
 
 @Composable
 fun NotesScreen(
-    sessionViewModel: SessionViewModel,
-    onNavigateToAdd: () -> Unit = {}
+    sessionViewModel: SessionViewModel
 ) {
     // val state by viewModel.state.collectAsState()
     val colors = MaterialTheme.colorScheme
@@ -101,7 +95,7 @@ fun NotesScreen(
                 },
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.NoteAdd,
+                    painter = painterResource(R.drawable.add),
                     contentDescription = "Add new",
                     tint = Color.White
                 )
@@ -143,9 +137,9 @@ fun NotesScreen(
 @Composable
 fun NotesTabRow(selected: NoteTab, onSelect: (NoteTab) -> Unit) {
     val tabs = listOf(
-        Triple(NoteTab.NOTES, Icons.Outlined.Description, "Notes"),
-        Triple(NoteTab.TODO, Icons.Outlined.CheckCircle, "To-Do"),
-        Triple(NoteTab.PRIVATE, Icons.Outlined.Lock, "Private"),
+        Triple(NoteTab.NOTES, painterResource(R.drawable.notes), "Notes"),
+        Triple(NoteTab.TODO, painterResource(R.drawable.todo), "To-Do"),
+        Triple(NoteTab.PRIVATE, painterResource(R.drawable.more), "More"),
     )
     val isDark = isSystemInDarkTheme()
     val BgCard = if (isDark) {
@@ -177,7 +171,7 @@ fun NotesTabRow(selected: NoteTab, onSelect: (NoteTab) -> Unit) {
                     .background(bgColor)
                     .border(
                         width = if (isSelected) 0.dp else 1.dp,
-                        color = if (isSelected) Color.Transparent else DividerColor,
+                        color = if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .clickable { onSelect(tab) }
@@ -273,7 +267,7 @@ fun NotesHeader(username: String) {
                 letterSpacing = (-0.5).sp
             )
             Text(
-                text = "${sampleNotes.size} notes · ${sampleTodos.count { !it.isDone }} tasks pending",
+                text = "${6} notes · ${4} tasks pending",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
@@ -317,26 +311,26 @@ fun SearchBar() {
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(BgCard)
-            .border(1.dp, DividerColor, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(Icons.Outlined.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+        Icon(painterResource(R.drawable.search), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         Text(
             text = query.ifEmpty { "Search your notes..." },
             color = if (query.isEmpty()) Color.DarkGray else Color.Gray,
             fontSize = 14.sp
         )
         Spacer(Modifier.weight(1f))
-        Icon(Icons.Outlined.Tune, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+        Icon(painterResource(R.drawable.tune), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
     }
 }
 
 @Preview(showSystemUi = true, device = "spec:width=411dp,height=891dp", name = "Dark Mode")
 @Composable
 fun PreviewNotes() {
-    APWNotesTheme(darkTheme = true) {
+    APWNotesTheme(darkTheme = false) {
         androidx.compose.material3.Surface(
             color = Color.Black
         ) {

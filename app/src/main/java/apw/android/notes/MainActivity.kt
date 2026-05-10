@@ -5,15 +5,10 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import apw.android.notes.ui.composables.CreateNoteScreen
 import apw.android.notes.ui.composables.LoginScreen
 import apw.android.notes.ui.composables.NotesScreen
 import apw.android.notes.ui.theme.APWNotesTheme
@@ -51,17 +46,8 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("notes") {
                         NotesScreen(
-                            sessionViewModel = sessionViewModel,
-                            onNavigateToAdd = {
-                                navController.navigate("add_note")
-                            }
+                            sessionViewModel = sessionViewModel
                         )
-                    }
-
-                    composable("add_note") {
-                        CreateNoteScreen {
-
-                        }
                     }
                 }
             }
