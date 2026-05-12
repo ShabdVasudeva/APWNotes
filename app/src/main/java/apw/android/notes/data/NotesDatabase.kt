@@ -8,6 +8,8 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         NoteEntity::class,
+        TagCrossRef::class,
+        TagEntity::class,
         BlockEntity::class
     ],
     version = 1

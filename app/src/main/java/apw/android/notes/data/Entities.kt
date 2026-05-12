@@ -1,8 +1,11 @@
 package apw.android.notes.data
 
 import androidx.compose.ui.text.style.TextAlign
+import androidx.room.Embedded
 import androidx.room.Entity
+import androidx.room.Junction
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 
 fun BlockEntity.toDomain(): NoteBlock {
     return when(type) {
@@ -47,11 +50,41 @@ fun BlockEntity.toDomain(): NoteBlock {
     }
 }
 
+@Entity(tableName = "tags")
+data class TagEntity(
+    @PrimaryKey (autoGenerate = true)
+    val tagId: Long = 0,
+    val name: String
+)
+
+@Entity(tableName = "tag_cross_ref", primaryKeys = ["noteId", "tagId"])
+data class TagCrossRef(
+    val noteId: Long,
+    val tagId: Long
+)
+
+data class NoteWithTags(
+    @Embedded
+    val note: NoteEntity,
+
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "tagId",
+        associateBy = Junction(
+            value = TagCrossRef::class,
+            parentColumn = "noteId",
+            entityColumn = "tagId"
+        )
+    )
+    val tags: List<TagEntity>
+)
+
 @Entity(tableName = "notes")
 data class NoteEntity(
     @PrimaryKey
     val id: Long,
     val title: String,
+
     val createdAt: Long,
     val updatedAt: Long
 )

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -108,26 +109,33 @@ fun NotesScreen(
         ) {
             items(
                 items = notes,
-                key = {it.id}
-            ) { note ->
+                key = {it.note.id}
+            ) { obj ->
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(20.dp).clickable {
                         (context as Activity).launchEditNotes(
-                            noteId = note.id
+                            noteId = obj.note.id
                         )
                     },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "${note.id}"
+                        text = "${obj.note.id}"
                     )
                     Text(
-                        text = note.title
+                        text = obj.note.title
                     )
                     Text(
-                        text = "${note.createdAt}"
+                        text = "${obj.note.createdAt}"
                     )
+
+                    LazyRow {
+                        items(obj.tags) {
+                            Text("tag: ${it.name}")
+                            Text("tagId: ${it.tagId}")
+                        }
+                    }
                 }
             }
         }

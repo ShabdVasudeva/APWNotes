@@ -44,6 +44,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation(platform("androidx.compose:compose-bom:2026.05.00"))
     implementation(platform("com.google.firebase:firebase-bom:34.13.0"))
+    implementation("com.google.android.gms:play-services-auth:21.5.1")
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")

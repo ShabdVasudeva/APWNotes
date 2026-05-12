@@ -24,7 +24,8 @@ data class EditNotesUIState(
             id = System.nanoTime(),
             txt = ""
         )
-    )
+    ),
+    val tags: List<String> = emptyList()
 )
 
 class EditViewModel(
@@ -341,6 +342,29 @@ class EditViewModel(
 
         dao.insertBlocks(blockEntities)
 
+        dao.deleteBlockForNote(noteId)
+
+        current.tags.forEach { tagName ->
+            val cleanTag = tagName.trim().lowercase()
+            val currentTag = dao.getTagByName(cleanTag)
+            val tagId = if (currentTag != null) {
+                currentTag.tagId
+            } else {
+                val newId = System.currentTimeMillis()
+                dao.insertTag(TagEntity(
+                    tagId = newId,
+                    name = cleanTag
+                ))
+                newId
+            }
+            dao.insertTagCrossRef(
+                TagCrossRef(
+                    noteId = noteId,
+                    tagId = tagId
+                )
+            )
+        }
+
         _uiState.value = current.copy(
             noteId = noteId
         )
@@ -397,5 +421,16 @@ class EditViewModel(
         updateFormat {
             copy(alignment = align)
         }
+    }
+
+    fun addTag(tag: String) {
+        val cleaned = tag.trim()
+        if (cleaned.isBlank()) return
+        if (cleaned in _uiState.value.tags) return
+        _uiState.value = _uiState.value.copy(tags = _uiState.value.tags + cleaned)
+    }
+
+    fun removeTag(tag: String) {
+        _uiState.value = _uiState.value.copy(tags = _uiState.value.tags - tag)
     }
 }

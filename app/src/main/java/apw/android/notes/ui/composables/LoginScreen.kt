@@ -1,7 +1,10 @@
 package apw.android.notes.ui.composables
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +59,10 @@ import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.CoroutineScope
@@ -113,6 +120,34 @@ fun LoginContent(
         .setServerClientId(stringResource(R.string.default_web_client_id))
         .setFilterByAuthorizedAccounts(false)
         .build()
+    val googleSignInOption = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestIdToken(stringResource(R.string.default_web_client_id))
+        .requestEmail()
+        .build()
+    val googleSignInClient = GoogleSignIn.getClient(context, googleSignInOption)
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken != null) {
+                onSignIn(idToken)
+            } else {
+                Toast.makeText(context, "No ID Token", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e("AUTH", "Old Google Sign-In failed", e)
+
+            Toast.makeText(
+                context,
+                "Fallback login failed: ${e.message}",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
     val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
     val snackbarHostState = SnackbarHostState()
     val gradient = if (isDark) {
@@ -190,19 +225,36 @@ fun LoginContent(
                 onClick = {
                     scope.launch {
                         try {
+                            Log.d("AUTH", "Trying Credential Manager")
                             val result = credentialManager.getCredential(context, request)
+                            Log.d("AUTH", "Credential Manager success")
                             val credential = result.credential
-                            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                val googleCredential: GoogleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                                val idToken: String = googleCredential.idToken
+                            if (
+                                credential is CustomCredential &&
+                                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                            ) {
+                                Log.d("AUTH", "Google credential received")
+                                val googleCredential =
+                                    GoogleIdTokenCredential.createFrom(credential.data)
+                                val idToken = googleCredential.idToken
+                                Log.d("AUTH", "ID TOKEN = $idToken")
                                 onSignIn(idToken)
                             }
-                        } catch (e: NoCredentialException) {
-                            snackbarHostState.showSnackbar("Error: ${e.message}")
-                        } catch (e: GetCredentialCancellationException) {
-                            snackbarHostState.showSnackbar("Error: ${e.message}")
                         } catch (e: Exception) {
-                            snackbarHostState.showSnackbar("Error: ${e.message}")
+                            Log.e("AUTH", "Credential Manager FAILED", e)
+                            try {
+                                Log.d("AUTH", "Launching old Google Sign-In")
+                                launcher.launch(
+                                    googleSignInClient.signInIntent
+                                )
+                            } catch (e2: Exception) {
+                                Log.e("AUTH", "Fallback launcher failed", e2)
+                                Toast.makeText(
+                                    context,
+                                    "Fallback failed: ${e2.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
                         }
                     }
                 },

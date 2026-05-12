@@ -38,6 +38,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,6 +71,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
@@ -82,7 +85,6 @@ import apw.android.notes.data.NoteBlock
 import apw.android.notes.data.NotesDatabase
 import apw.android.notes.ui.theme.APWNotesTheme
 import kotlinx.coroutines.launch
-import kotlin.collections.mutableMapOf
 
 fun Activity.launchEditNotes(
     noteId: Long? = null
@@ -163,8 +165,11 @@ fun EditNotes(noteId: Long) {
                 onBackClick = {(context as Activity).finish()},
                 modifier = Modifier.statusBarsPadding(),
                 undo = { viewModel.undo() },
-                redo = { viewModel.redo() }
-            )
+                redo = { viewModel.redo() },
+                tagsList = uiState.tags
+            ) {
+                viewModel.addTag(it)
+            }
         },
         bottomBar = {
             BottomEditBar(
@@ -443,7 +448,7 @@ fun BottomEditBar(
         FormatItem(
             icon = R.drawable.strike_through,
             isSelected = isStrikeThrough,
-            contentDescription = "Stricked Text",
+            contentDescription = "Strike Text",
             onClick = toggleStrikeThrough
         ),
         FormatItem(
@@ -682,14 +687,18 @@ fun TopAppBar(
     onBackClick: () -> Unit,
     undo: () -> Unit,
     redo: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tagsList: List<String>,
+    addTag: (String) -> Unit
 ) {
-
-    val tagsList = listOf(
-        "#ideas", "#android"
-    )
-
     val colorScheme = MaterialTheme.colorScheme
+    var isAddingTag by remember {
+        mutableStateOf(false)
+    }
+
+    var tagInput by remember {
+        mutableStateOf("")
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -837,9 +846,65 @@ fun TopAppBar(
                         })
                     }
                     item {
-                        SuggestionChip(onClick = {}, label = {
-                            Text(text = "+ Add")
-                        })
+
+                        if (isAddingTag) {
+
+                            BasicTextField(
+                                value = tagInput,
+                                onValueChange = {
+                                    tagInput = it
+                                },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 14.sp
+                                ),
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+
+                                        val cleaned = tagInput.trim()
+
+                                        if (cleaned.isNotEmpty()) {
+                                            addTag(cleaned)
+                                        }
+
+                                        tagInput = ""
+                                        isAddingTag = false
+                                    }
+                                ),
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                decorationBox = { inner ->
+
+                                    if (tagInput.isEmpty()) {
+                                        Text(
+                                            text = "Tag...",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    inner()
+                                }
+                            )
+
+                        } else {
+
+                            SuggestionChip(
+                                onClick = {
+                                    isAddingTag = true
+                                },
+                                label = {
+                                    Text("+ Add")
+                                }
+                            )
+                        }
                     }
                 }
                 VerticalDivider(
